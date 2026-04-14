@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>羽球排點</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #d0ccbe;          /* 暖米色背景 */
+      --bg2: #bfbbae;         /* 較深的米色 */
+      --card: #efece3;        /* 卡片底色 */
+      --card2: #ffffff;       /* 白色內層 */
+      --accent: #f97316;      /* 主題橘 */
+      --accent-soft: #fed7aa; /* 淡橘 */
+      --accent2: #059669;     /* 綠色 (開始) */
+      --warn: #eab308;        /* 黃色 */
+      --danger: #dc2626;      /* 紅色 (結束) */
+      --text: #2b2a27;        /* 深灰近黑 */
+      --muted: #7a7568;       /* 中灰 */
+      --border: rgba(0,0,0,0.12);
+      --border-soft: rgba(0,0,0,0.06);
+      --male: #2563eb;
+      --female: #db2777;
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+    body { padding-bottom: 40px; }
+
+    /* Header */
+    .header {
+      position: sticky; top: 0; z-index: 50;
+      display: grid; grid-template-columns: 1fr 1.2fr 1fr;
+      gap: 8px; padding: 10px;
+      background: rgba(208,204,190,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header button {
+      padding: 12px 6px; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; color: #fff;
+      transition: transform .15s, opacity .15s;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .header button:active { transform: scale(0.95); }
+    .btn-end { background: var(--danger); }
+    .btn-start { background: var(--accent2); font-size: 17px; }
+    .btn-settings { background: var(--accent); }
+    .btn-end:disabled, .btn-start:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Sections */
+    .section {
+      margin: 12px 10px; background: var(--card);
+      border-radius: 14px; border: 1px solid var(--border-soft);
+      overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .section-title {
+      padding: 10px 14px; font-size: 14px; font-weight: 700;
+      color: var(--text); letter-spacing: 0.05em;
+      background: rgba(0,0,0,0.03);
+      border-bottom: 1px solid var(--border-soft);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .section-title .count {
+      background: var(--accent); padding: 2px 10px;
+      border-radius: 10px; font-size: 12px; color: #fff; font-weight: 600;
+    }
+    .section-body { padding: 10px; }
+
+    /* Courts Grid — 2 courts per row (each = 1/2 mobile width) */
+    .courts-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    /* 實際球場配色 */
+    .court {
+      background: #2d8f6f;
+      background-image:
+        linear-gradient(90deg, transparent 0, transparent 49%, rgba(255,255,255,0.35) 49%, rgba(255,255,255,0.35) 51%, transparent 51%);
+      border-radius: 6px;
+      padding: 5px;
+      border: 2px solid #fff;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.15);
+      position: relative;
+    }
+    .court.standby {
+      grid-column: 1 / -1;
+      border: 3px solid var(--accent);
+      background-color: #3a9b7a;
+    }
+    .court-label {
+      font-size: 10px; color: rgba(255,255,255,0.9); margin-bottom: 4px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 700; letter-spacing: 0.04em;
+      padding-right: 22px;
+    }
+    .court-label .team-sep { color: rgba(255,255,255,0.6); font-size: 9px; font-weight: 500; }
+    .court-slots {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 3px;
+    }
+    .slot {
+      background: rgba(255,255,255,0.14);
+      border: 1px dashed rgba(255,255,255,0.4);
+      border-radius: 4px; padding: 4px 2px; text-align: center;
+      min-height: 36px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 12px; cursor: pointer; color: rgba(255,255,255,0.8);
+    }
+    .slot.filled {
+      border: 1.5px solid rgba(0,0,0,0.08); background: #fff; color: var(--text);
+    }
+    .slot.male.filled { border-top: 3px solid var(--male); }
+    .slot.female.filled { border-top: 3px solid var(--female); }
+    .slot.empty { color: rgba(255,255,255,0.7); font-size: 10px; }
+    .slot-name { font-weight: 700; font-size: 12px; word-break: break-all; line-height: 1.1; }
+    .slot-meta { font-size: 9px; color: var(--muted); margin-top: 1px; }
+    /* 球網 + 隊伍級數總和 */
+    .team-divider {
+      display: flex; align-items: center; gap: 4px;
+      margin: 3px 0;
+      min-height: 12px;
+    }
+    .team-divider .net {
+      flex: 1; height: 2px;
+      background: repeating-linear-gradient(90deg,
+        rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 3px,
+        transparent 3px, transparent 6px);
+    }
+    .team-divider .team-sum {
+      font-size: 10px; font-weight: 700; color: #fff;
+      padding: 0 5px; border-radius: 3px;
+      background: rgba(0,0,0,0.28);
+      min-width: 22px; text-align: center; line-height: 14px;
+    }
+    .court-action {
+      width: 100%; margin-top: 4px; padding: 5px; border: none; border-radius: 4px;
+      background: var(--danger); color: #fff; font-weight: 700;
+      font-size: 11px; cursor: pointer; letter-spacing: 0.05em;
+    }
+    .court-action:disabled { opacity: 0.5; }
+
+    /* 球場被自動補滿時：橘底 → 白色 → 綠色 5 秒漸變 */
+    @keyframes courtFlash {
+      0%   { background-color: var(--accent); }
+      85%  { background-color: #ffffff; }
+      100% { background-color: #2d8f6f; }
+    }
+    .court.court-flash {
+      animation: courtFlash 5s ease-out;
+    }
+
+    /* 板凳區的「到備戰區」按鈕 */
+    .section-action-btn {
+      width: 100%; margin-top: 10px; padding: 10px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      letter-spacing: 0.05em;
+    }
+    .section-action-btn:active { transform: scale(0.98); }
+    .section-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .court-remove {
+      position: absolute; top: 3px; right: 3px;
+      width: 18px; height: 18px; border: none; border-radius: 50%;
+      background: rgba(255,255,255,0.85); color: var(--danger);
+      font-size: 11px; font-weight: 700; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      padding: 0; z-index: 2;
+    }
+    .court-remove:hover { background: var(--danger); color: #fff; }
+    .court-remove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Player chips (bench/rest/reserve) */
+    .chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      min-height: 40px;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 10px; border-radius: 16px; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--text);
+      border: 1px solid var(--border);
+      background: #fff;
+      transition: transform .1s;
+    }
+    .chip:active { transform: scale(0.95); }
+    .chip.male { background: #eff6ff; border-color: #bfdbfe; color: var(--male); }
+    .chip.female { background: #fdf2f8; border-color: #fbcfe8; color: var(--female); }
+    .chip .lv { font-size: 11px; color: var(--muted); font-weight: 500; }
+    .chip .games { font-size: 10px; color: var(--accent); font-weight: 600; }
+    .chip.selected { outline: 3px solid var(--accent); background: var(--accent-soft); color: var(--text); }
+    .empty-hint { color: var(--muted); font-size: 13px; padding: 6px; }
+
+    /* Bulk actions bar */
+    .bulk-actions {
+      display: none; flex-wrap: wrap; gap: 6px;
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .bulk-actions.show { display: flex; }
+    .bulk-count {
+      flex: 0 0 100%; font-size: 12px; color: var(--accent);
+      font-weight: 700; margin-bottom: 2px;
+    }
+    .bulk-btn {
+      flex: 1 1 calc(50% - 6px);
+      padding: 10px 6px; border: none; border-radius: 8px;
+      color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    .bulk-btn:active { transform: scale(0.96); }
+    .bulk-btn.to-standby { background: var(--accent); }
+    .bulk-btn.to-bench { background: var(--accent2); }
+    .bulk-btn.to-rest { background: #8b7355; }
+    .bulk-btn.to-reserve { background: #a8a29e; }
+    .bulk-btn.to-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); box-shadow: none; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100; padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--card); border-radius: 14px;
+      width: 100%; max-width: 420px; max-height: 85vh;
+      overflow-y: auto; border: 1px solid var(--border);
+      position: relative;
+    }
+    .modal-header {
+      padding: 14px 48px 14px 18px; font-size: 16px; font-weight: 600;
+      border-bottom: 1px solid var(--border); position: sticky; top: 0;
+      background: var(--card); z-index: 1;
+    }
+    .modal-close {
+      position: absolute; top: 10px; right: 10px;
+      width: 32px; height: 32px; border: none; border-radius: 50%;
+      background: rgba(0,0,0,0.08); color: var(--text);
+      font-size: 18px; cursor: pointer;
+    }
+    .modal-body { padding: 16px 18px; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+    .field input[type="text"] {
+      width: 100%; padding: 10px 12px; font-size: 15px;
+      background: var(--card2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+    }
+    .gender-group { display: flex; gap: 8px; }
+    .gender-group label {
+      flex: 1; padding: 10px; text-align: center;
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; margin: 0;
+      color: var(--text); font-size: 14px;
+    }
+    .gender-group input { display: none; }
+    .gender-group input:checked + span { font-weight: 700; }
+    .gender-group label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+    .slider-row .lv-val {
+      min-width: 38px; text-align: center; padding: 6px 10px;
+      background: var(--card2); border-radius: 8px; font-weight: 600;
+    }
+
+    .btn-primary {
+      width: 100%; padding: 12px; border: none; border-radius: 8px;
+      background: var(--accent); color: #fff; font-size: 15px;
+      font-weight: 600; cursor: pointer;
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row > * { flex: 1; }
+    .btn-secondary {
+      padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--card2); color: var(--text); font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-danger { background: var(--danger); color: #fff; border: none; }
+
+    /* Settings menu */
+    .menu-list { display: flex; flex-direction: column; }
+    .menu-item {
+      padding: 14px 18px; font-size: 15px; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:active { background: rgba(0,0,0,0.04); }
+
+    /* Toggle */
+    .toggle {
+      position: relative; width: 44px; height: 24px;
+      background: #c4bfb2; border-radius: 12px; cursor: pointer;
+      transition: background .2s;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle::after {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 20px; height: 20px; background: #fff;
+      border-radius: 50%; transition: left .2s;
+    }
+    .toggle.on::after { left: 22px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; top: 80px; left: 50%;
+      transform: translateX(-50%); z-index: 200;
+      background: var(--accent); color: #fff;
+      padding: 10px 18px; border-radius: 20px;
+      font-size: 14px; font-weight: 700; display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .toast.show { display: block; animation: toastIn .3s; }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translate(-50%, -10px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    /* Player list */
+    .player-list { max-height: 60vh; overflow-y: auto; }
+    .player-row {
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer;
+    }
+    .player-row:active { background: rgba(0,0,0,0.04); }
+    .player-info { display: flex; align-items: center; gap: 8px; }
+    .player-badge {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff;
+    }
+    .player-badge.male { background: var(--male); }
+    .player-badge.female { background: var(--female); }
+    .player-meta { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+    .action-buttons {
+      display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+    }
+    .action-buttons button {
+      padding: 12px; border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      color: #fff;
+    }
+    .act-bench { background: var(--accent2); }
+    .act-standby { background: var(--accent); }
+    .act-rest { background: #8b7355; }
+    .act-reserve { background: #a8a29e; }
+    .act-swap { background: var(--male); }
+    .act-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+    .court-select-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 8px;
+    }
+    .court-select-btn {
+      padding: 12px; background: var(--card2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 14px; cursor: pointer;
+      font-weight: 600;
+    }
+    .court-select-btn.full { opacity: 0.4; }
+    .court-select-btn.empty { border-color: var(--accent); color: var(--accent); background: #fff7ed; }
+
+    /* + Add court card */
+    .court.add-court {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 110px; background: rgba(255,255,255,0.4);
+      background-image: none;
+      border: 2px dashed rgba(0,0,0,0.2);
+      box-shadow: none;
+      cursor: pointer;
+      color: var(--muted); font-size: 13px; font-weight: 600;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .court.add-court:active { transform: scale(0.97); }
+    .court.add-court:hover { border-color: var(--accent); color: var(--accent); background: #fff7ed; }
+    .court.add-court .plus { font-size: 24px; margin-right: 4px; line-height: 1; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <button class="btn-end" id="btnEnd" disabled>結束比賽</button>
+    <button class="btn-start" id="btnStart">開始比賽</button>
+    <button class="btn-settings" id="btnSettings">設定</button>
+  </div>
+
+  <!-- 羽球網: 球場1-8 + 備戰區球場 -->
+  <div class="section">
+    <div class="section-title">羽球網 <span class="count" id="courtCount">0 / 1</span></div>
+    <div class="section-body">
+      <div class="courts-grid" id="courtsGrid"></div>
+      <div style="margin-top: 10px;">
+        <div class="court standby" id="standbyCourt">
+          <div class="court-label"><span>備戰區球場</span><span id="standbyStatus"></span></div>
+          <div class="court-slots" id="standbyTopSlots"></div>
+          <div class="team-divider">
+            <span class="team-sum" id="standbySumA">-</span>
+            <span class="net"></span>
+            <span class="team-sum" id="standbySumB">-</span>
+          </div>
+          <div class="court-slots" id="standbyBottomSlots"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 板凳區 -->
+  <div class="section">
+    <div class="section-title">板凳區 <span class="count" id="benchCount">0</span></div>
+    <div class="section-body">
+      <div class="chips" id="benchList"></div>
+      <button class="section-action-btn" id="benchToStandbyBtn">到備戰區</button>
+      <div class="bulk-actions" id="benchActions"></div>
+    </div>
+  </div>
+
+  <!-- 休息區 -->
+  <div class="section">
+    <div class="section-title">休息區 <span class="count" id="restCount">0</span></div>
+    <div class="section-body">
+      <div class="chips" id="restList"></div>
+      <div class="bulk-actions" id="restActions"></div>
+    </div>
+  </div>
+
+  <!-- 候補區 -->
+  <div class="section">
+    <div class="section-title">候補區 <span class="count" id="reserveCount">0</span></div>
+    <div class="section-body">
+      <div class="chips" id="reserveList"></div>
+      <div class="bulk-actions" id="reserveActions"></div>
+    </div>
+  </div>
+
+  <!-- Modal: 設定 menu -->
+  <div class="modal-backdrop" id="modalSettings">
+    <div class="modal">
+      <div class="modal-header">設定
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="menu-list">
+        <div class="menu-item" data-menu="add">1. 新增球員 <span>＋</span></div>
+        <div class="menu-item" data-menu="list">2. 球員一覽 <span>›</span></div>
+        <div class="menu-item" data-menu="mixed">3. 混雙 <span class="toggle" id="mixedToggle"></span></div>
+        <div class="menu-item" data-menu="reset">4. 重製 <span>↻</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 新增球員 -->
+  <div class="modal-backdrop" id="modalAdd">
+    <div class="modal">
+      <div class="modal-header">新增球員
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>姓名</label>
+          <input type="text" id="addName" placeholder="請輸入姓名" maxlength="12">
+        </div>
+        <div class="field">
+          <label>性別</label>
+          <div class="gender-group">
+            <label><input type="radio" name="addGender" value="M" checked><span>男</span></label>
+            <label><input type="radio" name="addGender" value="F"><span>女</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label>級數 (1-15)</label>
+          <div class="slider-row">
+            <input type="range" id="addLevel" min="1" max="15" step="1" value="8">
+            <span class="lv-val" id="addLevelVal">8</span>
+          </div>
+        </div>
+        <button class="btn-primary" id="addSubmit">新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 球員一覽 -->
+  <div class="modal-backdrop" id="modalList">
+    <div class="modal">
+      <div class="modal-header">球員一覽
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="player-list" id="playerList"></div>
+    </div>
+  </div>
+
+  <!-- Modal: 編輯球員 -->
+  <div class="modal-backdrop" id="modalEdit">
+    <div class="modal">
+      <div class="modal-header">編輯球員
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>姓名</label>
+          <input type="text" id="editName" maxlength="12">
+        </div>
+        <div class="field">
+          <label>性別</label>
+          <div class="gender-group">
+            <label><input type="radio" name="editGender" value="M"><span>男</span></label>
+            <label><input type="radio" name="editGender" value="F"><span>女</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label>級數 (1-15)</label>
+          <div class="slider-row">
+            <input type="range" id="editLevel" min="1" max="15" step="1">
+            <span class="lv-val" id="editLevelVal"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>上場場數</label>
+          <div class="slider-row">
+            <input type="text" id="editGames" style="width:80px" readonly>
+            <button class="btn-secondary" id="editGamesReset" style="flex:0 0 auto;">歸零</button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" id="editSave">儲存</button>
+          <button class="btn-secondary btn-danger" id="editDelete">刪除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 球員動作 -->
+  <div class="modal-backdrop" id="modalAction">
+    <div class="modal">
+      <div class="modal-header" id="actionTitle">選手動作
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="player-info" id="actionPlayerInfo" style="margin-bottom: 14px;"></div>
+        <div class="action-buttons" id="actionButtons"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 選擇球場 (for swap from court slot) -->
+  <div class="modal-backdrop" id="modalCourtSelect">
+    <div class="modal">
+      <div class="modal-header" id="courtSelectTitle">選擇目的地
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="court-select-grid" id="courtSelectGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  // =========================================================
+  // 資料模型
+  // =========================================================
+  const STORAGE_KEY = "badminton_team_v1";
+  const MAX_COURTS = 8;
+
+  /**
+   * player: { id, name, gender('M'|'F'), level(1-15), games, loc, courtIdx?, pos? }
+   * loc: 'rest' | 'reserve' | 'bench' | 'standby' | 'court'
+   * pos: 0=TL,1=TR (teamA), 2=BL,3=BR (teamB) — used for court & standby
+   */
+  const state = {
+    players: [],
+    mixedDoubles: false,
+    gameStarted: false,
+    numCourts: 1,
+    nextId: 1,
+  };
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      Object.assign(state, data);
+    } catch (e) { console.warn(e); }
+  }
+
+  // helpers
+  const byLoc = (loc) => state.players.filter(p => p.loc === loc);
+  const courtPlayers = (idx) => state.players
+    .filter(p => p.loc === 'court' && p.courtIdx === idx)
+    .sort((a,b)=>a.pos-b.pos);
+  const standbyPlayers = () => state.players
+    .filter(p => p.loc === 'standby')
+    .sort((a,b)=>a.pos-b.pos);
+
+  function findPlayer(id) { return state.players.find(p => p.id === id); }
+
+  // =========================================================
+  // 排點演算法
+  // =========================================================
+  /** 從 pool 選出 4 位球員：優先上場次數最少，再依混雙規則 */
+  function pickFour(pool, mixed) {
+    if (pool.length < 4) return null;
+    const sorted = [...pool].sort((a,b) => a.games - b.games || a.level - b.level);
+    if (!mixed) return sorted.slice(0, 4);
+    // 混雙：需要 2M + 2F
+    const males = sorted.filter(p => p.gender === 'M');
+    const females = sorted.filter(p => p.gender === 'F');
+    if (males.length < 2 || females.length < 2) return null;
+    return [males[0], males[1], females[0], females[1]];
+  }
+
+  /** 將 4 位球員分隊並平均級數：(最高+最低) vs (中間兩位) */
+  function arrange(four, mixed) {
+    // 位置 0,1 = teamA；2,3 = teamB
+    if (mixed) {
+      const males = four.filter(p => p.gender === 'M');
+      const females = four.filter(p => p.gender === 'F');
+      if (males.length !== 2 || females.length !== 2) return null;
+      // 組合 A：(M高 + F低) vs (M低 + F高) 平衡
+      males.sort((a,b)=>b.level-a.level);
+      females.sort((a,b)=>a.level-b.level);
+      return [males[0], females[0], males[1], females[1]];
+    }
+    const sorted = [...four].sort((a,b)=>b.level-a.level);
+    // 平衡：team A = idx 0 + 3；team B = idx 1 + 2
+    return [sorted[0], sorted[3], sorted[1], sorted[2]];
+  }
+
+  function assignToSlot(player, loc, courtIdx, pos) {
+    player.loc = loc;
+    player.courtIdx = (loc === 'court') ? courtIdx : undefined;
+    player.pos = (loc === 'court' || loc === 'standby') ? pos : undefined;
+  }
+
+  function sendTo(player, loc) {
+    player.loc = loc;
+    player.courtIdx = undefined;
+    player.pos = undefined;
+  }
+
+  /** 嘗試填滿備戰區球場 */
+  function fillStandby() {
+    const current = standbyPlayers();
+    if (current.length >= 4) return;
+
+    const pool = byLoc('bench');
+    const needed = 4 - current.length;
+    if (pool.length < needed) return; // 不足則不填
+
+    // 若備戰區已有球員，直接從板凳區補少量 (不重排)
+    if (current.length > 0) {
+      const extra = [...pool].sort((a,b)=>a.games-b.games || a.level-b.level).slice(0, needed);
+      let posCursor = 0;
+      const used = new Set(current.map(p=>p.pos));
+      extra.forEach(p => {
+        while (used.has(posCursor)) posCursor++;
+        assignToSlot(p, 'standby', undefined, posCursor);
+        used.add(posCursor);
+      });
+      return;
+    }
+
+    // 空的備戰區：選 4 人 + 排隊形
+    const four = pickFour(pool, state.mixedDoubles);
+    if (!four) return;
+    const arranged = arrange(four, state.mixedDoubles);
+    if (!arranged) return;
+    arranged.forEach((p, i) => assignToSlot(p, 'standby', undefined, i));
+  }
+
+  /** 結束某球場：玩家回板凳區、games+1；不自動把備戰區推上球場 */
+  function endCourt(idx) {
+    const players = courtPlayers(idx);
+    players.forEach(p => {
+      p.games = (p.games || 0) + 1;
+      sendTo(p, 'bench');
+    });
+    toast(`球場${idx+1} 結束`);
+    commit();
+  }
+
+  /** 第一個空球場的索引（沒有則回傳 -1） */
+  function firstEmptyCourtIdx() {
+    for (let i = 0; i < state.numCourts; i++) {
+      if (courtPlayers(i).length === 0) return i;
+    }
+    return -1;
+  }
+
+  /** 記錄每個球場最近一次 flash 的時間戳，用來計算動畫殘餘時間 */
+  const courtFlashTimes = new Map();
+
+  /** 啟動指定球場的 5 秒漸變，並在結束後觸發一次重繪以移除 class */
+  function flashCourt(idx) {
+    courtFlashTimes.set(idx, Date.now());
+    setTimeout(() => {
+      const ts = courtFlashTimes.get(idx);
+      if (ts != null && Date.now() - ts >= 5000) {
+        courtFlashTimes.delete(idx);
+        render();
+      }
+    }, 5100);
+  }
+
+  /** 只要備戰區滿 4 且有空球場，就自動推上去並啟動 flash */
+  function autoFillEmptyCourts() {
+    while (true) {
+      const sby = standbyPlayers();
+      if (sby.length < 4) break;
+      const idx = firstEmptyCourtIdx();
+      if (idx < 0) break;
+      sby.forEach(p => { p.loc = 'court'; p.courtIdx = idx; });
+      flashCourt(idx);
+    }
+  }
+
+  /** 統一的狀態提交：嘗試自動補場 → 存檔 → 重新渲染（板凳→備戰區改為手動觸發） */
+  function commit() {
+    autoFillEmptyCourts();
+    save();
+    render();
+  }
+
+  /** 手動把板凳區 4 位推到備戰區（板凳區「到備戰區」按鈕） */
+  function manualFillStandby() {
+    const sbyBefore = standbyPlayers().length;
+    fillStandby();
+    const sbyAfter = standbyPlayers().length;
+    if (sbyAfter <= sbyBefore) {
+      toast("板凳區不足 4 位或備戰區已滿");
+      return;
+    }
+    commit();
+    toast("已推 4 位到備戰區");
+  }
+
+  /** 開始比賽：先補備戰區，commit 會自動把備戰區推到空球場 */
+  function startGame() {
+    if (state.gameStarted) { toast("比賽已開始"); return; }
+    if (byLoc('bench').length < 4) { toast("板凳區至少需 4 位球員"); return; }
+    state.gameStarted = true;
+    fillStandby();
+    commit();
+    toast("比賽開始");
+  }
+
+  /** 新增一個球場 */
+  function addCourt() {
+    if (state.numCourts >= MAX_COURTS) { toast(`最多 ${MAX_COURTS} 面球場`); return; }
+    state.numCourts++;
+    commit();
+    toast(`已新增球場${state.numCourts}`);
+  }
+
+  /** 刪除指定球場：場上選手回板凳區，後面的球場編號向前遞補 */
+  function removeCourt(idx) {
+    if (state.numCourts <= 1) { toast("最少保留 1 面球場"); return; }
+    const onCourt = courtPlayers(idx);
+    if (onCourt.length > 0 && !confirm(`球場${idx+1} 還有選手，確定刪除？他們將回到板凳區`)) return;
+    onCourt.forEach(p => sendTo(p, 'bench'));
+    // 其後的球場編號全部 -1
+    state.players.forEach(p => {
+      if (p.loc === 'court' && p.courtIdx > idx) p.courtIdx -= 1;
+    });
+    state.numCourts--;
+    commit();
+    toast(`已刪除球場${idx+1}`);
+  }
+
+  /** 結束比賽：所有人回休息區 */
+  function endGame() {
+    state.players.forEach(p => {
+      if (p.loc === 'court' || p.loc === 'standby' || p.loc === 'bench') {
+        sendTo(p, 'rest');
+      }
+    });
+    state.gameStarted = false;
+    save(); render();
+    toast("比賽結束");
+  }
+
+  /** 重製：所有人到休息區 + games 歸零 + 關閉比賽 */
+  function resetAll() {
+    state.players.forEach(p => {
+      sendTo(p, 'rest');
+      p.games = 0;
+    });
+    state.gameStarted = false;
+    save(); render();
+    toast("已重製");
+  }
+
+  // =========================================================
+  // 批量選擇
+  // =========================================================
+  const selectedIds = new Set();
+  let selectedLoc = null; // 'bench' | 'rest' | 'reserve'
+
+  function toggleSelect(player) {
+    if (selectedLoc && selectedLoc !== player.loc) {
+      selectedIds.clear();
+      selectedLoc = null;
+    }
+    if (selectedIds.has(player.id)) {
+      selectedIds.delete(player.id);
+      if (selectedIds.size === 0) selectedLoc = null;
+    } else {
+      selectedIds.add(player.id);
+      selectedLoc = player.loc;
+    }
+    render();
+  }
+
+  function clearSelection() {
+    selectedIds.clear();
+    selectedLoc = null;
+  }
+
+  function getSelectedPlayers() {
+    return [...selectedIds].map(findPlayer).filter(Boolean);
+  }
+
+  /** 批量移動到指定位置 */
+  function bulkMove(toLoc) {
+    const players = getSelectedPlayers();
+    if (players.length === 0) return;
+    let movedCount = 0, skipped = 0;
+    players.forEach(p => {
+      if (toLoc === 'standby') {
+        const sby = standbyPlayers();
+        if (sby.length >= 4) { skipped++; return; }
+        const used = new Set(sby.map(x=>x.pos));
+        let pos = 0; while (used.has(pos)) pos++;
+        assignToSlot(p, 'standby', undefined, pos);
+        movedCount++;
+      } else {
+        sendTo(p, toLoc);
+        movedCount++;
+      }
+    });
+    clearSelection();
+    commit();
+    if (skipped > 0) toast(`已移 ${movedCount} 位，${skipped} 位因備戰區已滿略過`);
+    else toast(`已移動 ${movedCount} 位`);
+  }
+
+  /** 某區域的批量動作列 */
+  function renderBulkActions(containerId, loc) {
+    const el = $(containerId);
+    const active = selectedLoc === loc && selectedIds.size > 0;
+    if (!active) {
+      el.classList.remove('show');
+      el.innerHTML = '';
+      return;
+    }
+    const buttons = [];
+    if (loc === 'bench') {
+      buttons.push(['to-standby', '→ 備戰區', () => bulkMove('standby')]);
+      buttons.push(['to-reserve', '→ 候補區', () => bulkMove('reserve')]);
+      buttons.push(['to-rest',    '→ 休息區', () => bulkMove('rest')]);
+    } else if (loc === 'rest') {
+      buttons.push(['to-bench',   '→ 板凳區', () => bulkMove('bench')]);
+      buttons.push(['to-reserve', '→ 候補區', () => bulkMove('reserve')]);
+    } else if (loc === 'reserve') {
+      buttons.push(['to-rest',    '→ 休息區', () => bulkMove('rest')]);
+      buttons.push(['to-bench',   '→ 板凳區', () => bulkMove('bench')]);
+    }
+    buttons.push(['to-cancel', '取消選取', () => { clearSelection(); render(); }]);
+    el.classList.add('show');
+    el.innerHTML =
+      `<div class="bulk-count">已選 ${selectedIds.size} 位</div>` +
+      buttons.map((_, i) => `<button class="bulk-btn ${buttons[i][0]}" data-bulk-idx="${i}">${buttons[i][1]}</button>`).join('');
+    el.querySelectorAll('.bulk-btn').forEach(btn => {
+      const idx = parseInt(btn.dataset.bulkIdx);
+      btn.addEventListener('click', buttons[idx][2]);
+    });
+  }
+
+  // =========================================================
+  // UI 渲染
+  // =========================================================
+  const $ = (id) => document.getElementById(id);
+
+  function chipHTML(p, opts = {}) {
+    const cls = p.gender === 'M' ? 'male' : 'female';
+    const selCls = selectedIds.has(p.id) ? ' selected' : '';
+    const games = (p.games > 0) ? `<span class="games">·${p.games}場</span>` : '';
+    return `<div class="chip ${cls}${selCls}" data-id="${p.id}">
+      <span>${p.name}</span>
+      <span class="lv">Lv${p.level}</span>
+      ${games}
+    </div>`;
+  }
+
+  function slotHTML(p, posLabel) {
+    if (!p) {
+      return `<div class="slot empty" data-empty="1">${posLabel || '空位'}</div>`;
+    }
+    const cls = p.gender === 'M' ? 'male' : 'female';
+    return `<div class="slot filled ${cls}" data-id="${p.id}">
+      <div class="slot-name">${p.name}</div>
+      <div class="slot-meta">Lv${p.level}${p.games?` · ${p.games}場`:''}</div>
+    </div>`;
+  }
+
+  function renderCourts() {
+    const grid = $('courtsGrid');
+    let html = '';
+    let filledCount = 0;
+    for (let i = 0; i < state.numCourts; i++) {
+      const ps = courtPlayers(i);
+      const bySlot = [null, null, null, null];
+      ps.forEach(p => { if (p.pos >= 0 && p.pos < 4) bySlot[p.pos] = p; });
+      const isFull = ps.length === 4;
+      if (isFull) filledCount++;
+      const canRemove = state.numCourts > 1;
+      const sumA = (bySlot[0]?.level || 0) + (bySlot[1]?.level || 0);
+      const sumB = (bySlot[2]?.level || 0) + (bySlot[3]?.level || 0);
+      let courtCls = 'court';
+      let courtStyle = '';
+      const flashStart = courtFlashTimes.get(i);
+      if (flashStart != null) {
+        const elapsed = (Date.now() - flashStart) / 1000;
+        if (elapsed < 5) {
+          courtCls += ' court-flash';
+          courtStyle = ` style="animation-delay: -${elapsed.toFixed(2)}s;"`;
+        } else {
+          courtFlashTimes.delete(i);
+        }
+      }
+      html += `
+        <div class="${courtCls}" data-court="${i}"${courtStyle}>
+          <button class="court-remove" data-remove-court="${i}" ${canRemove?'':'disabled'} title="刪除此球場">✕</button>
+          <div class="court-label"><span>球場${i+1}</span><span class="team-sep">${isFull?'2v2':''}</span></div>
+          <div class="court-slots">
+            ${slotHTML(bySlot[0], 'A1')}
+            ${slotHTML(bySlot[1], 'A2')}
+          </div>
+          <div class="team-divider">
+            <span class="team-sum">${sumA || '-'}</span>
+            <span class="net"></span>
+            <span class="team-sum">${sumB || '-'}</span>
+          </div>
+          <div class="court-slots">
+            ${slotHTML(bySlot[2], 'B1')}
+            ${slotHTML(bySlot[3], 'B2')}
+          </div>
+          <button class="court-action" data-end-court="${i}" ${isFull?'':'disabled'}>結束</button>
+        </div>`;
+    }
+    // + 新增球場卡片
+    if (state.numCourts < MAX_COURTS) {
+      html += `<div class="court add-court" id="addCourtBtn"><span class="plus">+</span>新增球場</div>`;
+    }
+    grid.innerHTML = html;
+    $('courtCount').textContent = `${filledCount} / ${state.numCourts}`;
+    const addBtn = $('addCourtBtn');
+    if (addBtn) addBtn.addEventListener('click', addCourt);
+  }
+
+  function renderStandby() {
+    const ps = standbyPlayers();
+    const bySlot = [null, null, null, null];
+    ps.forEach(p => { if (p.pos >= 0 && p.pos < 4) bySlot[p.pos] = p; });
+    $('standbyTopSlots').innerHTML = `
+      ${slotHTML(bySlot[0], 'A1')}
+      ${slotHTML(bySlot[1], 'A2')}
+    `;
+    $('standbyBottomSlots').innerHTML = `
+      ${slotHTML(bySlot[2], 'B1')}
+      ${slotHTML(bySlot[3], 'B2')}
+    `;
+    const sumA = (bySlot[0]?.level || 0) + (bySlot[1]?.level || 0);
+    const sumB = (bySlot[2]?.level || 0) + (bySlot[3]?.level || 0);
+    $('standbySumA').textContent = sumA || '-';
+    $('standbySumB').textContent = sumB || '-';
+    $('standbyStatus').textContent = `${ps.length}/4`;
+  }
+
+  function renderList(id, arr) {
+    const el = $(id);
+    if (arr.length === 0) {
+      el.innerHTML = `<div class="empty-hint">（無）</div>`;
+    } else {
+      el.innerHTML = arr.map(p => chipHTML(p)).join('');
+    }
+  }
+
+  function render() {
+    // 清理：若選取的球員已離開原區域，移出選取
+    for (const id of [...selectedIds]) {
+      const p = findPlayer(id);
+      if (!p || p.loc !== selectedLoc) selectedIds.delete(id);
+    }
+    if (selectedIds.size === 0) selectedLoc = null;
+
+    renderCourts();
+    renderStandby();
+    renderList('benchList', byLoc('bench'));
+    renderList('restList', byLoc('rest'));
+    renderList('reserveList', byLoc('reserve'));
+    renderBulkActions('benchActions', 'bench');
+    renderBulkActions('restActions', 'rest');
+    renderBulkActions('reserveActions', 'reserve');
+    $('benchCount').textContent = byLoc('bench').length;
+    $('restCount').textContent = byLoc('rest').length;
+    $('reserveCount').textContent = byLoc('reserve').length;
+
+    $('btnEnd').disabled = !state.gameStarted;
+    $('btnStart').disabled = state.gameStarted;
+
+    $('mixedToggle').classList.toggle('on', state.mixedDoubles);
+  }
+
+  // =========================================================
+  // 事件: 球員互動 (Action Modal)
+  // =========================================================
+  function openActionModal(player) {
+    $('actionTitle').childNodes[0].textContent = `${player.name} 的動作`;
+    const badge = player.gender === 'M' ? 'male' : 'female';
+    $('actionPlayerInfo').innerHTML = `
+      <span class="player-badge ${badge}">${player.gender==='M'?'男':'女'}</span>
+      <strong>${player.name}</strong>
+      <span class="player-meta">Lv${player.level} · ${player.games||0}場 · ${locName(player.loc)}</span>
+    `;
+    const buttons = [];
+    if (player.loc === 'court') {
+      buttons.push({ label: '↔ 與 備戰區球場 交換', cls: 'act-swap', fn: () => swapCourtWithStandby(player) });
+      buttons.push({ label: '↔ 與 板凳區 交換 / 移出', cls: 'act-bench', fn: () => openSwapWithBench(player) });
+    } else if (player.loc === 'standby') {
+      buttons.push({ label: '→ 去球場 (選擇空場)', cls: 'act-swap', fn: () => pickCourtFor(player, 'from-standby') });
+      buttons.push({ label: '→ 回板凳區', cls: 'act-bench', fn: () => { sendTo(player,'bench'); afterChange('已移至板凳區'); } });
+    } else if (player.loc === 'bench') {
+      buttons.push({ label: '→ 備戰區球場', cls: 'act-standby', fn: () => moveBenchToStandby(player) });
+      buttons.push({ label: '→ 球場 (選擇空位)', cls: 'act-swap', fn: () => pickCourtFor(player, 'from-bench') });
+      buttons.push({ label: '→ 到候補區', cls: 'act-reserve', fn: () => { sendTo(player,'reserve'); afterChange('已移至候補區'); } });
+      buttons.push({ label: '→ 到休息區', cls: 'act-rest', fn: () => { sendTo(player,'rest'); afterChange('已移至休息區'); } });
+    } else if (player.loc === 'rest') {
+      buttons.push({ label: '→ 到板凳區', cls: 'act-bench', fn: () => { sendTo(player,'bench'); afterChange('已移至板凳區'); } });
+      buttons.push({ label: '→ 到候補區', cls: 'act-reserve', fn: () => { sendTo(player,'reserve'); afterChange('已移至候補區'); } });
+    } else if (player.loc === 'reserve') {
+      buttons.push({ label: '→ 到休息區', cls: 'act-rest', fn: () => { sendTo(player,'rest'); afterChange('已移至休息區'); } });
+    }
+    buttons.push({ label: '取消', cls: 'act-cancel', fn: () => closeModal('modalAction') });
+    $('actionButtons').innerHTML = '';
+    buttons.forEach(b => {
+      const btn = document.createElement('button');
+      btn.className = b.cls; btn.textContent = b.label;
+      btn.onclick = b.fn;
+      $('actionButtons').appendChild(btn);
+    });
+    openModal('modalAction');
+  }
+
+  function locName(loc) {
+    return { court:'球場', standby:'備戰區', bench:'板凳區', rest:'休息區', reserve:'候補區' }[loc] || loc;
+  }
+
+  function afterChange(msg) {
+    closeModal('modalAction');
+    if (msg) toast(msg);
+    commit();
+  }
+
+  function moveBenchToStandby(player) {
+    const sby = standbyPlayers();
+    if (sby.length >= 4) { toast("備戰區已滿"); return; }
+    let pos = 0;
+    const used = new Set(sby.map(p=>p.pos));
+    while (used.has(pos)) pos++;
+    assignToSlot(player, 'standby', undefined, pos);
+    afterChange('已加入備戰區');
+  }
+
+  /** 交換球場玩家與備戰區 (若備戰區已滿，選一個位置交換；若有空位，移過去) */
+  function swapCourtWithStandby(player) {
+    const sby = standbyPlayers();
+    if (sby.length < 4) {
+      // 有空位，直接移過去，原位置變空
+      let pos = 0;
+      const used = new Set(sby.map(p=>p.pos));
+      while (used.has(pos)) pos++;
+      assignToSlot(player, 'standby', undefined, pos);
+      afterChange('已移至備戰區');
+      return;
+    }
+    // 備戰區已滿：彈出選擇要跟誰交換
+    showSimpleSwapPicker(player, sby, (target) => {
+      const pCourt = player.courtIdx, pPos = player.pos;
+      const tPos = target.pos;
+      assignToSlot(player, 'standby', undefined, tPos);
+      assignToSlot(target, 'court', pCourt, pPos);
+      afterChange('已交換');
+    });
+  }
+
+  function openSwapWithBench(player) {
+    const bench = byLoc('bench');
+    if (bench.length === 0) {
+      // 沒有板凳區選手，直接把 player 踢回板凳區
+      const cIdx = player.courtIdx;
+      sendTo(player, 'bench');
+      toast(`已將 ${player.name} 移至板凳區`);
+      closeModal('modalAction');
+      commit();
+      return;
+    }
+    showSimpleSwapPicker(player, bench, (target) => {
+      const cIdx = player.courtIdx, pPos = player.pos;
+      sendTo(player, 'bench');
+      assignToSlot(target, 'court', cIdx, pPos);
+      afterChange('已交換');
+    });
+  }
+
+  function showSimpleSwapPicker(player, candidates, onPick) {
+    const title = $('courtSelectTitle');
+    title.childNodes[0].textContent = `選擇要與 ${player.name} 交換的球員`;
+    const grid = $('courtSelectGrid');
+    grid.innerHTML = '';
+    candidates.forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'court-select-btn';
+      b.textContent = `${c.name} (Lv${c.level})`;
+      b.onclick = () => { closeModal('modalCourtSelect'); onPick(c); };
+      grid.appendChild(b);
+    });
+    closeModal('modalAction');
+    openModal('modalCourtSelect');
+  }
+
+  /** 選擇一個空的球場位置把玩家放進去 */
+  function pickCourtFor(player, from) {
+    const title = $('courtSelectTitle');
+    title.childNodes[0].textContent = `選擇球場`;
+    const grid = $('courtSelectGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < state.numCourts; i++) {
+      const ps = courtPlayers(i);
+      const isEmpty = ps.length === 0;
+      const b = document.createElement('button');
+      b.className = 'court-select-btn ' + (ps.length===4?'full':(isEmpty?'empty':''));
+      b.textContent = `球場${i+1} (${ps.length}/4)`;
+      if (ps.length < 4) {
+        b.onclick = () => {
+          const used = new Set(ps.map(p=>p.pos));
+          let pos = 0;
+          while (used.has(pos)) pos++;
+          // 源位置處理
+          if (player.loc === 'standby' || player.loc === 'bench') {
+            assignToSlot(player, 'court', i, pos);
+            closeModal('modalCourtSelect');
+            // 若從 standby 出去，嘗試補
+            if (from === 'from-standby') fillStandby();
+            afterChange('已安排至球場');
+          }
+        };
+      } else {
+        b.disabled = true; b.style.opacity = 0.4;
+      }
+      grid.appendChild(b);
+    }
+    closeModal('modalAction');
+    openModal('modalCourtSelect');
+  }
+
+  // =========================================================
+  // Modal 管理
+  // =========================================================
+  function openModal(id) { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    m.addEventListener('click', (e) => {
+      if (e.target === m) {
+        // 點擊新增球員以外的背景才關
+        if (m.id !== 'modalAdd') m.classList.remove('open');
+      }
+    });
+  });
+  document.querySelectorAll('[data-close]').forEach(b => {
+    b.addEventListener('click', () => {
+      const m = b.closest('.modal-backdrop');
+      if (m) m.classList.remove('open');
+    });
+  });
+
+  // =========================================================
+  // 設定 Menu
+  // =========================================================
+  $('btnSettings').addEventListener('click', () => openModal('modalSettings'));
+  document.querySelectorAll('#modalSettings .menu-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const m = item.dataset.menu;
+      if (m === 'add') { closeModal('modalSettings'); resetAddForm(); openModal('modalAdd'); }
+      if (m === 'list') { closeModal('modalSettings'); renderPlayerList(); openModal('modalList'); }
+      if (m === 'mixed') { state.mixedDoubles = !state.mixedDoubles; commit(); }
+      if (m === 'reset') {
+        if (confirm("確定要將所有選手重製並回到休息區？")) {
+          resetAll(); closeModal('modalSettings');
+        }
+      }
+    });
+  });
+
+  // =========================================================
+  // 新增球員
+  // =========================================================
+  function resetAddForm() {
+    $('addName').value = '';
+    $('addLevel').value = 8;
+    $('addLevelVal').textContent = '8';
+    document.querySelector('input[name="addGender"][value="M"]').checked = true;
+  }
+  $('addLevel').addEventListener('input', e => $('addLevelVal').textContent = e.target.value);
+  $('addSubmit').addEventListener('click', () => {
+    const name = $('addName').value.trim();
+    if (!name) { toast("請輸入姓名"); return; }
+    const gender = document.querySelector('input[name="addGender"]:checked').value;
+    const level = parseInt($('addLevel').value);
+    const p = {
+      id: state.nextId++, name, gender, level,
+      games: 0, loc: 'rest',
+    };
+    state.players.push(p);
+    commit();
+    toast(`已新增 ${name}`);
+    resetAddForm();
+    $('addName').focus();
+  });
+
+  // =========================================================
+  // 球員一覽 + 編輯
+  // =========================================================
+  let editingId = null;
+  function renderPlayerList() {
+    const list = $('playerList');
+    if (state.players.length === 0) {
+      list.innerHTML = `<div class="empty-hint" style="padding:20px;">尚無球員</div>`;
+      return;
+    }
+    list.innerHTML = state.players.map(p => {
+      const badge = p.gender === 'M' ? 'male' : 'female';
+      return `<div class="player-row" data-id="${p.id}">
+        <div class="player-info">
+          <span class="player-badge ${badge}">${p.gender==='M'?'男':'女'}</span>
+          <strong>${p.name}</strong>
+          <span class="player-meta">Lv${p.level} · ${p.games||0}場</span>
+        </div>
+        <span style="color:var(--muted)">›</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.player-row').forEach(row => {
+      row.addEventListener('click', () => {
+        editingId = parseInt(row.dataset.id);
+        openEdit(editingId);
+      });
+    });
+  }
+
+  function openEdit(id) {
+    const p = findPlayer(id); if (!p) return;
+    $('editName').value = p.name;
+    $('editLevel').value = p.level;
+    $('editLevelVal').textContent = p.level;
+    $('editGames').value = p.games || 0;
+    document.querySelector(`input[name="editGender"][value="${p.gender}"]`).checked = true;
+    closeModal('modalList');
+    openModal('modalEdit');
+  }
+  $('editLevel').addEventListener('input', e => $('editLevelVal').textContent = e.target.value);
+  $('editGamesReset').addEventListener('click', () => $('editGames').value = '0');
+  $('editSave').addEventListener('click', () => {
+    const p = findPlayer(editingId); if (!p) return;
+    const name = $('editName').value.trim();
+    if (!name) { toast("姓名不可空白"); return; }
+    p.name = name;
+    p.gender = document.querySelector('input[name="editGender"]:checked').value;
+    p.level = parseInt($('editLevel').value);
+    p.games = parseInt($('editGames').value) || 0;
+    commit();
+    closeModal('modalEdit');
+    toast("已更新");
+    renderPlayerList();
+    openModal('modalList');
+  });
+  $('editDelete').addEventListener('click', () => {
+    if (!confirm("確定刪除此球員？")) return;
+    state.players = state.players.filter(p => p.id !== editingId);
+    commit();
+    closeModal('modalEdit');
+    toast("已刪除");
+    renderPlayerList();
+    openModal('modalList');
+  });
+
+  // =========================================================
+  // 主按鈕
+  // =========================================================
+  $('btnStart').addEventListener('click', startGame);
+  $('btnEnd').addEventListener('click', () => {
+    if (confirm("確定結束比賽？所有上場/板凳/備戰選手將回到休息區")) endGame();
+  });
+  $('benchToStandbyBtn').addEventListener('click', manualFillStandby);
+
+  // =========================================================
+  // 委派：chip / slot / 結束按鈕 點擊
+  // =========================================================
+  document.body.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('[data-remove-court]');
+    if (removeBtn) {
+      e.stopPropagation();
+      const idx = parseInt(removeBtn.dataset.removeCourt);
+      removeCourt(idx);
+      return;
+    }
+    const endBtn = e.target.closest('[data-end-court]');
+    if (endBtn) {
+      const idx = parseInt(endBtn.dataset.endCourt);
+      endCourt(idx);
+      return;
+    }
+    const slot = e.target.closest('.slot.filled');
+    if (slot) {
+      const id = parseInt(slot.dataset.id);
+      const p = findPlayer(id); if (p) openActionModal(p);
+      return;
+    }
+    const chip = e.target.closest('.chip');
+    if (chip) {
+      const id = parseInt(chip.dataset.id);
+      const p = findPlayer(id); if (!p) return;
+      // 板凳/休息/候補區採批量選取；其他情境走動作視窗
+      if (p.loc === 'bench' || p.loc === 'rest' || p.loc === 'reserve') {
+        toggleSelect(p);
+      } else {
+        openActionModal(p);
+      }
+      return;
+    }
+  });
+
+  // =========================================================
+  // Toast
+  // =========================================================
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // =========================================================
+  // 初始化
+  // =========================================================
+  load();
+  // 舊資料相容：確保 numCourts 至少涵蓋目前上場的球場
+  const maxCourtIdx = state.players.reduce((m, p) =>
+    (p.loc === 'court' && typeof p.courtIdx === 'number') ? Math.max(m, p.courtIdx) : m, -1);
+  if (state.numCourts < maxCourtIdx + 1) state.numCourts = maxCourtIdx + 1;
+  state.numCourts = Math.max(1, Math.min(MAX_COURTS, state.numCourts || 1));
+  render();
+  </script>
+</body>
+</html>
